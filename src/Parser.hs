@@ -26,6 +26,7 @@ operator = do
 
 accessLevel :: ReadP String
 accessLevel = do
+    many whitespace
     val <- munch1(\char -> isDigit char)
     many whitespace
     return val
