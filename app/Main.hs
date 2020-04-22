@@ -19,8 +19,7 @@ loop text = do
         character ->
             loop (text ++ [character])
     
-getResult :: String -> String
 getResult query =
     case parseQuery ( map toLower query) of
         Nothing -> "Error: Query was invalid. Please enter another query."
-        Just (_, _) -> "The query was valid!"
+        Just result -> show result
