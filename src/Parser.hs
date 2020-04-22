@@ -1,6 +1,9 @@
-module Parser (parseQuery, clauseList) where
+module Parser (parseQuery, clauseList, QueryType) where
 import Text.ParserCombinators.ReadP
 import Data.Char
+import Data.List
+
+type QueryType = (String, [String], [String], [(String, String)])
 
 {- Common functions -}
 whitespace :: ReadP Char
@@ -20,6 +23,12 @@ operator = do
     key <- satisfy (\char -> char == '=')
     many whitespace
     return [key]
+
+accessLevel :: ReadP String
+accessLevel = do
+    val <- munch1(\char -> isDigit char)
+    many whitespace
+    return val
 
 keyword :: ReadP String
 keyword = do
@@ -95,15 +104,32 @@ whereStatement = do
     return result
 
 {- Putting it all together... -}
-query :: ReadP ([String], [String], [(String, String)])
+query :: ReadP QueryType
 query = do
+    access <- accessLevel
     select <- selectStatement
     from <- fromStatement
     whr <- option [] whereStatement
-    return (select, from, whr)
+    return (access, select, from, whr)
 
-parseQuery :: String -> Maybe ([String], [String], [(String, String)])
+isReservedWord :: String -> Bool
+isReservedWord string =
+    string /= "from" && string /= "select" && string /= "where" && string /= "kc"
+
+removeReserved :: QueryType -> QueryType
+removeReserved (a, b, c, d) =
+    let second = filter isReservedWord b
+        third = filter isReservedWord c
+    in
+    (a, second, third, d)
+
+parseQuery :: String -> Maybe QueryType
 parseQuery input =
     case readP_to_S query input of
         [] -> Nothing
-        list -> Just $ fst $ last list
+        list -> case removeReserved $ fst $ last list of
+            (a, b, c, d) ->
+                if (length b) == 0 || (length c) == 0 then
+                    Nothing
+                else
+                    Just (a, b, c, d)
