@@ -1,6 +1,5 @@
 module Main where
 import System.IO
-import Data.List.Split
 import Data.Char
 import Parser
 
