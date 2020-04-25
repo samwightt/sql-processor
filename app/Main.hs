@@ -3,6 +3,7 @@ import System.Environment
 import Data.Char
 import FileParser
 import Parser
+import Executor
 
 mapInd :: (a -> Int -> b) -> [a] -> [b]
 mapInd f l = zipWith f l [0..]
@@ -16,9 +17,9 @@ main = do
     tables <- getTables args
     print $ show tables
     putStrLn "Please enter a classification level, followed by a query. This prompt will loop until you exit with ^C."
-    loop ""
+    loop tables ""
 
-getTables :: [String] -> IO [TableType]
+getTables :: [String] -> IO [Table]
 getTables args = do
   files <- mapM getFile args
   let results = parseFiles files
@@ -32,20 +33,25 @@ getFile f = do
                 }
          )
 
-loop :: String -> IO ()
-loop text = do
+loop :: [Table] -> String -> IO ()
+loop t text = do
   c <- getChar
   case c of
     ';' -> do
-      print $ show $ getResult text
-      loop ""
+      print $ show $ length $ getResult t text
+      loop t ""
     character ->
-      loop (text ++ [character])
+      loop t (text ++ [character])
 
-getResult :: String -> String
-getResult query =
+getResult :: [Table] -> String -> [[String]]
+getResult tables query =
   let
     result = parseQuery ( map toLower query )
     errorText = "Error: Query was invalid. Please enter another query."
   in
-  maybe errorText (show . selectList) result
+  case result of
+    Nothing -> [[errorText]]
+    Just q ->
+      case getCrossProduct q tables of
+        Left err -> [[err]]
+        Right r -> r

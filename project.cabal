@@ -29,6 +29,7 @@ library
   exposed-modules:
       Parser
       FileParser
+      Executor
   other-modules:
       Paths_project
   hs-source-dirs:
