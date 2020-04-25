@@ -27,8 +27,8 @@ source-repository head
 
 library
   exposed-modules:
-      Lib
       Parser
+      FileParser
   other-modules:
       Paths_project
   hs-source-dirs:

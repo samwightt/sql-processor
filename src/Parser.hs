@@ -1,136 +1,144 @@
-module Parser (parseQuery, clauseList, QueryType) where
+module Parser (parseQuery, clauseList, QueryType(..), ComparisonOp(..)) where
 import Text.ParserCombinators.ReadP
 import Data.Char
-import Data.List
 
-type QueryType = (String, [String], [String], [(String, String)])
+data ComparisonOp = Equality String String
+
+data QueryType = QueryType { accessLevel :: String
+                           , selectList :: [String]
+                           , fromList :: [String]
+                           , whereList :: [ComparisonOp]}
 
 {- Common functions -}
 whitespace :: ReadP Char
-whitespace = do
-    satisfy (\char -> any (char ==) "\n ")
+whitespace = satisfy (\c -> c `elem` "\n ")
 
 separator :: ReadP String
 separator = do
-    many whitespace
-    key <- satisfy (\char -> char == ',')
-    many whitespace
-    return [key]
+  _ <- many whitespace
+  key <- satisfy (== ',')
+  _ <- many whitespace
+  return [key]
 
 operator :: ReadP String
 operator = do
-    many whitespace
-    key <- satisfy (\char -> char == '=')
-    many whitespace
-    return [key]
+  _ <- many whitespace
+  key <- satisfy (== '=')
+  _ <- many whitespace
+  return [key]
 
-accessLevel :: ReadP String
-accessLevel = do
-    many whitespace
-    val <- munch1(\char -> isDigit char)
-    many whitespace
-    return val
+accessL :: ReadP String
+accessL = do
+  _ <- many whitespace
+  val <- munch1 isDigit
+  _ <- many whitespace
+  return val
 
 keyword :: ReadP String
-keyword = do
-    munch1(\char -> (isAlpha char) || (isDigit char))
+keyword = munch1 (\c -> isAlpha c || isDigit c)
 
 keywordList :: ReadP [String]
-keywordList = do
-    sepBy1 keyword separator
+keywordList = sepBy1 keyword separator
 
 wildCard :: ReadP [String]
 wildCard = do
-    key <- satisfy(\char -> char == '*')
-    many1 whitespace
-    return [[key]]
+  key <- satisfy (== '*')
+  _ <- many1 whitespace
+  return [[key]]
 
-clause :: ReadP (String, String)
+clause :: ReadP ComparisonOp
 clause = do
-    first <- keyword
-    operator
-    second <- keyword
-    many whitespace
-    return (first, second)
+  first <- keyword
+  _ <- operator
+  second <- keyword
+  _ <- many whitespace
+  return (Equality first second)
 
 andKeyword :: ReadP String
 andKeyword = do
-    key <- string "and"
-    many1 whitespace
-    return key
+  key <- string "and"
+  _ <- many1 whitespace
+  return key
 
-clauseList :: ReadP [(String, String)]
-clauseList = do
-    sepBy1 clause andKeyword
+clauseList :: ReadP [ComparisonOp]
+clauseList = sepBy1 clause andKeyword
 
 {- Keywords and statements functions -}
 selectKeyword :: ReadP String
 selectKeyword = do
-    select <- string "select"
-    many1 whitespace
-    return select
+  select <- string "select"
+  _ <- many1 whitespace
+  return select
 
 selectStatement :: ReadP [String]
 selectStatement = do
-    many whitespace
-    selectKeyword
-    result <- choice [wildCard, keywordList]
-    many whitespace
-    return result
+  _ <- many whitespace
+  _ <- selectKeyword
+  result <- choice [wildCard, keywordList]
+  _ <- many whitespace
+  return result
 
 fromKeyword :: ReadP String
 fromKeyword = do
-    from <- string "from"
-    many1 whitespace
-    return from
+  from <- string "from"
+  _ <- many1 whitespace
+  return from
 
 fromStatement :: ReadP [String]
 fromStatement = do
-    fromKeyword
-    result <- keywordList
-    many whitespace
-    return result
+  _ <- fromKeyword
+  result <- keywordList
+  _ <- many whitespace
+  return result
 
 whereKeyword :: ReadP String
 whereKeyword = do
-    key <- string "where"
-    many1 whitespace
-    return key
+  key <- string "where"
+  _ <- many1 whitespace
+  return key
 
-whereStatement :: ReadP [(String, String)]
+whereStatement :: ReadP [ComparisonOp]
 whereStatement = do
-    whereKeyword
-    result <- clauseList
-    many whitespace
-    return result
+  _ <- whereKeyword
+  result <- clauseList
+  _ <- many whitespace
+  return result
 
 {- Putting it all together... -}
 query :: ReadP QueryType
 query = do
-    access <- accessLevel
-    select <- selectStatement
-    from <- fromStatement
-    whr <- option [] whereStatement
-    return (access, select, from, whr)
+  access <- accessL
+  select <- selectStatement
+  from <- fromStatement
+  whr <- option [] whereStatement
+  return QueryType { accessLevel = access
+                   , selectList = select
+                   , fromList = from
+                   , whereList = whr}
 
 isReservedWord :: String -> Bool
-isReservedWord string =
-    string /= "from" && string /= "select" && string /= "where" && string /= "kc"
+isReservedWord str =
+  str /= "from" && str /= "select" && str /= "where" && str /= "kc"
 
 removeReserved :: QueryType -> QueryType
-removeReserved (a, b, c, d) =
-    let second = filter isReservedWord b
-        third = filter isReservedWord c
-    in
-    (a, second, third, d)
+removeReserved q =
+  let
+    second = filter isReservedWord $  selectList q
+    third = filter isReservedWord $ fromList q
+  in
+  q { selectList = second, fromList = third}
 
 parseQuery :: String -> Maybe QueryType
 parseQuery input =
-    case readP_to_S query input of
-        [] -> Nothing
-        list -> case removeReserved $ fst $ last list of
-            (a, b, c, d) ->
-                if (length b) == 0 || (length c) == 0 then
-                    Nothing
-                else
-                    Just (a, b, c, d)
+  case readP_to_S query input of
+    [] -> Nothing
+    list ->
+      let
+        result = removeReserved $ fst $ last list
+        s = selectList result
+        f = fromList result
+      in
+        if null s || null f then
+          Nothing
+        else
+          Just result
